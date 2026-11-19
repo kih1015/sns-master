@@ -1,0 +1,15 @@
+# 비밀 값과 실행 기록
+.env
+data/
+
+# 재배포할 수 없는 외부 음원 (README의 "릴스 음원 준비" 참고)
+reel-template/assets/bgm/
+reel-template/assets/sfx/
+assets/narration-sample-macos.m4a
+
+# 로컬 환경에서 생성되는 파일
+node_modules/
+.DS_Store
+.playwright-mcp/
+.claude/settings.local.json
+*.log

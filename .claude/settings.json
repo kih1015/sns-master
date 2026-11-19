@@ -1,0 +1,61 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node cli.js:*)",
+      "WebSearch",
+      "Edit(/data/runs/**)",
+      "Skill(korean-skills:humanizer)",
+      "Skill(korean-skills:grammar-checker)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/guard.js\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/progress.js\""
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "sns-researcher|sns-critic|sns-copywriter|sns-reader|sns-flow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/progress.js\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "sns-researcher|sns-critic|sns-copywriter|sns-reader|sns-flow",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/hooks/progress.js\""
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "korean-skills@korean-skills": true,
+    "hyperframes@hyperframes": true
+  }
+}

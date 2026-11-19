@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SNS Master</title>
+<style>
+  :root {
+    --bg: #f2f4f6; --card: #ffffff; --field: #f2f4f6; --line: #e5e8eb;
+    --text: #191f28; --sub: #4e5968; --muted: #5f6b7a;
+    --blue: #1b64da; --blue-soft: #e8f3ff; --bar: #3182f6;
+    --green: #027a4b; --green-soft: #e3f7ee; --red: #d22030; --red-soft: #ffeeee;
+    --orange: #a85d00; --orange-soft: #fff3e0; --gray-soft: #f2f4f6;
+    --shadow: 0 1px 3px rgba(0, 23, 51, .04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101013; --card: #1b1b21; --field: #26262e; --line: #30303a;
+      --text: #ececef; --sub: #c3c3c9; --muted: #a2a2ab;
+      --blue-soft: #1c2c47; --bar: #4593fc;
+      --green: #3fd598; --green-soft: #15332a; --red: #ff7a85; --red-soft: #3d1c20;
+      --orange: #ffb44d; --orange-soft: #3a2a12; --gray-soft: #26262e;
+      --link: #7db4ff; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 "Toss Product Sans", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; letter-spacing: -.01em; }
+  h1, h2, h3, p { margin: 0; }
+  button { font: inherit; letter-spacing: inherit; cursor: pointer; }
+  a { color: var(--link, var(--blue)); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { padding: 2px 8px; border-radius: 6px; background: var(--field); font: 13px ui-monospace, Menlo, monospace; }
+
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 14px 24px; background: var(--card); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 19px; font-weight: 800; }
+  #conn { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  #conn::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+  #conn.off { color: var(--red); } #conn.off::before { background: var(--red); }
+  #platforms { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+
+  .badge { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--sub); background: var(--gray-soft); }
+  .badge.running, .badge.publishing { color: var(--link, var(--blue)); background: var(--blue-soft); }
+  .badge.done, .badge.on { color: var(--green); background: var(--green-soft); }
+  .badge.failed, .badge.rejected { color: var(--red); background: var(--red-soft); }
+  .badge.awaiting_approval, .badge.unknown { color: var(--orange); background: var(--orange-soft); }
+
+  main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; align-items: start; }
+  .card { padding: 24px; border-radius: 20px; background: var(--card); box-shadow: var(--shadow); }
+  .card + .card { margin-top: 16px; }
+  .card > h2 { margin-bottom: 16px; font-size: 18px; font-weight: 700; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+
+  aside { position: sticky; top: 78px; padding: 16px 12px; }
+  #new { display: flex; gap: 8px; padding: 0 4px; }
+  #new input { flex: 1; min-width: 0; padding: 12px 14px; border: 2px solid transparent; border-radius: 14px; background: var(--field); color: var(--text); font: inherit; }
+  #new input:focus { outline: 0; border-color: var(--bar); background: var(--card); }
+  #new .btn { flex: none; padding: 12px 16px; font-size: 15px; }
+  #new-hint { padding: 6px 8px 14px; }
+  #filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 4px 12px; }
+  .filter { padding: 6px 12px; border: 0; border-radius: 999px; background: var(--field); color: var(--sub); font-size: 13px; font-weight: 600; }
+  .filter.sel { background: var(--text); color: var(--card); }
+  #list { max-height: calc(100vh - 210px); overflow: auto; }
+  .item { display: flex; gap: 12px; align-items: center; width: 100%; padding: 12px; border: 0; border-radius: 14px; background: none; color: var(--text); text-align: left; }
+  .item:hover { background: var(--field); }
+  .item.sel { background: var(--blue-soft); }
+  .thumb { flex: none; width: 44px; height: 44px; border-radius: 12px; background: var(--field) center / cover; }
+  .item .body { min-width: 0; flex: 1; }
+  .item .topic { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty { padding: 28px 12px; text-align: center; }
+
+  .hero h2 { font-size: 24px; font-weight: 800; line-height: 1.35; }
+  .hero .lead { margin: 4px 0 22px; color: var(--sub); }
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); }
+  .step { position: relative; text-align: center; font-size: 13px; }
+  .step::before { content: ""; position: absolute; top: 15px; left: -50%; width: 100%; height: 2px; background: var(--line); }
+  .step:first-child::before { display: none; }
+  .step.done::before, .step.running::before, .step.failed::before { background: var(--bar); }
+  .dot { position: relative; z-index: 1; display: grid; place-items: center; width: 32px; height: 32px; margin: 0 auto 8px; border-radius: 50%; background: var(--field); color: var(--muted); font-weight: 700; }
+  .step.done .dot, .node.done .dot { background: var(--blue); color: #fff; }
+  .step.running .dot, .node.running .dot { background: var(--blue-soft); color: var(--link, var(--blue)); box-shadow: 0 0 0 4px var(--blue-soft); animation: pulse 1.4s infinite; }
+  .step.failed .dot, .node.failed .dot { background: var(--red-soft); color: var(--red); }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 8px transparent; } }
+  @media (prefers-reduced-motion: reduce) { .step.running .dot, .node.running .dot { animation: none; } }
+
+  .node { position: relative; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 16px; padding-bottom: 30px; }
+  .node:last-child { padding-bottom: 0; }
+  .node::before { content: ""; position: absolute; left: 17px; top: 36px; bottom: 0; width: 2px; background: var(--line); }
+  .node:last-child::before { display: none; }
+  .node.done::before { background: var(--bar); }
+  .node .dot { width: 36px; height: 36px; margin: 0; }
+  .node h3 { margin: 5px 0 2px; font-size: 16px; }
+  .node.wait > div:last-child { opacity: .55; }
+  .lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+  .lane { padding: 14px; border-radius: 14px; background: var(--field); }
+  .lane b { display: block; font-size: 14px; }
+  .lane .big { font-size: 24px; font-weight: 800; }
+  .lane ul { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; color: var(--muted); }
+  .lane li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cand { margin-top: 6px; padding: 11px 14px; border-radius: 12px; background: var(--field); font-size: 14px; }
+  .cand.pick { background: var(--blue-soft); font-weight: 700; box-shadow: inset 0 0 0 2px var(--bar); }
+  details summary.mini { font-size: 13px; font-weight: 600; color: var(--sub); gap: 8px; }
+  .lane summary.mini { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .cand summary.mini { font-size: 14px; font-weight: inherit; color: var(--text); }
+  details summary.mini::after { content: "▾"; font-size: 12px; }
+  details[open] summary.mini::after { content: "▴"; }
+  ul.plain { margin: 8px 0 0; padding-left: 18px; font-size: 13px; font-weight: 400; color: var(--sub); }
+  .scores { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 12px 0 2px; }
+  .score { padding: 12px; border-radius: 14px; background: var(--field); font-size: 13px; color: var(--sub); }
+  .score b { display: block; font-size: 22px; color: var(--text); }
+  .meter { display: flex; gap: 3px; margin-top: 6px; }
+  .meter i { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+  .meter i.on { background: var(--bar); }
+  .strip { display: flex; gap: 8px; margin-top: 12px; overflow-x: auto; }
+  .strip img { display: block; width: 96px; border-radius: 10px; }
+  .step b { display: block; font-size: 14px; }
+  .step .err { color: var(--red); }
+
+  .review { display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); gap: 24px; }
+  .review img { display: block; width: 100%; border-radius: 16px; background: var(--field); }
+  .slides { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; border-radius: 16px; }
+  .slides a { flex: 0 0 100%; scroll-snap-align: start; }
+  .pick { margin-bottom: 20px; padding: 16px; border-radius: 14px; background: var(--field); }
+  .pick b { display: block; }
+  .field { margin-bottom: 14px; }
+  .field-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-weight: 700; }
+  .count { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .count.over { color: var(--red); font-weight: 700; }
+  textarea { display: block; width: 100%; min-height: 110px; padding: 14px 16px; border: 2px solid transparent; border-radius: 14px; background: var(--field); color: var(--text); font: inherit; resize: vertical; }
+  textarea:focus { outline: 0; border-color: var(--bar); background: var(--card); }
+  .pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .readonly { padding: 14px 16px; border-radius: 14px; background: var(--field); }
+  .link-btn { margin-top: 4px; padding: 0; border: 0; background: none; color: var(--link, var(--blue)); font-size: 13px; font-weight: 600; }
+  h3 { margin: 22px 0 8px; font-size: 15px; font-weight: 700; }
+  .targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .target { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: var(--field); cursor: pointer; }
+  .target.off { cursor: not-allowed; }
+  .target.off b { color: var(--muted); }
+  .target input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--bar); }
+  .target small { display: block; color: var(--muted); line-height: 1.4; }
+  .actions { display: flex; gap: 8px; margin-top: 22px; }
+  .btn { padding: 14px 20px; border: 0; border-radius: 14px; background: var(--field); color: var(--sub); font-size: 16px; font-weight: 700; }
+  .btn.primary { flex: 1; background: var(--blue); color: #fff; }
+  .btn.danger { color: var(--red); background: var(--red-soft); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn:not(:disabled):active { transform: scale(.98); }
+  #hint { margin-top: 8px; color: var(--red); font-size: 13px; font-weight: 600; }
+
+  .row { display: flex; gap: 12px; align-items: flex-start; padding: 14px 0; border-top: 1px solid var(--line); }
+  .row:first-of-type { border-top: 0; padding-top: 0; }
+  .row:last-child { padding-bottom: 0; }
+  .row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { padding: 2px 10px; border-radius: 999px; background: var(--field); color: var(--sub); font-size: 12px; font-weight: 600; }
+
+  details summary { display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: 700; cursor: pointer; list-style: none; }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "펼치기"; font-size: 13px; font-weight: 600; color: var(--muted); }
+  details[open] summary::after { content: "접기"; }
+  #logs { max-height: 340px; margin-top: 16px; overflow: auto; padding: 14px 16px; border-radius: 14px; background: var(--field); font: 12px/1.7 ui-monospace, Menlo, monospace; }
+  #logs div { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  dialog { width: min(400px, calc(100vw - 32px)); padding: 28px 24px 20px; border: 0; border-radius: 24px; background: var(--card); color: var(--text); }
+  dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  dialog h2 { font-size: 20px; font-weight: 800; }
+  dialog p { margin: 8px 0 22px; color: var(--sub); }
+  dialog .actions { margin-top: 0; }
+  dialog .btn { flex: 1; }
+  #settings { width: min(620px, calc(100vw - 32px)); max-height: 92vh; overflow: auto; }
+  #settings p { margin: 4px 0 0; }
+  .set { margin-top: 18px; padding: 18px; border-radius: 16px; background: var(--field); }
+  .set-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; cursor: pointer; }
+  .set-head b { font-size: 16px; color: var(--text); }
+  .set-head input { flex: none; width: 22px; height: 22px; margin-top: 2px; accent-color: var(--bar); }
+  .set h3 { margin: 16px 0 8px; font-size: 14px; }
+  .set .row2 { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .set input[type="time"], .set input[type="text"] { padding: 9px 12px; border: 2px solid transparent; border-radius: 12px; background: var(--card); color: var(--text); font: inherit; }
+  .set input[type="text"] { width: 100%; }
+  .set input:focus { outline: 0; border-color: var(--bar); }
+  .set .filter { background: var(--card); }
+  .set .filter.sel { background: var(--text); color: var(--card); }
+  .set ul.plain { margin-top: 6px; }
+  .notice { margin: 0 0 20px; padding: 14px 16px; border-radius: 14px; background: var(--orange-soft); color: var(--orange); font-size: 14px; font-weight: 600; }
+  .notice ul { margin: 6px 0 0; padding-left: 18px; font-weight: 400; }
+  #toast { position: fixed; left: 50%; bottom: 32px; z-index: 10; transform: translateX(-50%); padding: 12px 20px; border-radius: 14px; background: #333d4b; color: #fff; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; padding: 16px; }
+    aside { position: static; } #list { max-height: 260px; }
+    .review { grid-template-columns: 1fr; }
+    .card { padding: 20px; }
+    .step b { font-size: 12px; }
+    .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .scores { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>SNS Master</h1>
+  <span id="conn">실시간 연결됨</span>
+  <div id="platforms"></div>
+  <button id="open-settings" class="filter" style="font-size:14px">자동화 <span id="auto-state" class="badge">꺼짐</span></button>
+</header>
+<main>
+  <aside class="card">
+    <form id="new">
+      <input name="topic" maxlength="200" placeholder="어떤 주제로 만들까요?" aria-label="조사할 주제">
+      <button class="btn primary">만들기</button>
+    </form>
+    <p class="muted small" id="new-hint">주제를 비워 두면 전체 트렌드를 조사해요</p>
+    <div id="filters"></div>
+    <div id="list"></div>
+  </aside>
+  <section id="detail"></section>
+</main>
+<dialog id="dialog">
+  <h2 id="dlg-title"></h2>
+  <p id="dlg-body"></p>
+  <div class="actions"><button class="btn" id="dlg-cancel">닫기</button><button class="btn primary" id="dlg-ok"></button></div>
+</dialog>
+<dialog id="settings">
+  <h2>자동화 설정</h2>
+  <div id="settings-body"></div>
+  <div class="actions" style="margin-top:20px"><button class="btn" id="settings-close">닫기</button><button class="btn primary" id="settings-save">저장하기</button></div>
+</dialog>
+<div id="toast" role="status"></div>
+<script>
+const STATUS = {
+  pending: '대기', running: '진행 중', done: '완료', failed: '실패', skipped: '건너뜀', unknown: '확인 필요',
+  awaiting_approval: '승인 대기', publishing: '게시 중', rejected: '반려',
+};
+const FILTERS = [
+  ['all', '전체', () => true],
+  ['wait', '승인 대기', (run) => run.status === 'awaiting_approval'],
+  ['active', '진행 중', (run) => ['running', 'publishing'].includes(run.status)],
+  ['done', '완료', (run) => run.status === 'done'],
+  ['failed', '실패·반려', (run) => ['failed', 'rejected'].includes(run.status)],
+];
+const CAPTIONS = ['instagram', 'threads', 'x'];
+const CHECK = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-label="완료"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const LIMITS = { instagram: 2200, threads: 500, x: 280 };
+
+const runs = new Map();
+const drafts = {};
+let platforms = {};
+let selected = null;
+let filter = 'all';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const badge = (status) => `<span class="badge ${status}">${STATUS[status] || esc(status)}</span>`;
+const stageOf = (run, key) => run.stages.find((stage) => stage.key === key);
+const label = (key) => platforms[key]?.label || key;
+// X는 한글과 같은 문자를 2자로 계산하며, 합계가 280을 넘으면 게시가 거부된다.
+const length = (key, text) => [...text].reduce((n, ch) => n + (key === 'x' && ch.codePointAt(0) > 0x10ff ? 2 : 1), 0);
+
+function elapsed(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return `${sec}초`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}분 ${sec % 60}초`;
+  return `${Math.floor(sec / 3600)}시간 ${Math.floor((sec % 3600) / 60)}분`;
+}
+
+function ago(iso) {
+  const min = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (min < 1) return '방금 전';
+  if (min < 60) return `${min}분 전`;
+  if (min < 1440) return `${Math.floor(min / 60)}시간 전`;
+  return new Date(iso).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
+}
+
+function host(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
+}
+
+function toast(message) {
+  $('toast').textContent = message;
+  $('toast').classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => $('toast').classList.remove('show'), 3000);
+}
+
+function ask(title, body, okLabel) {
+  $('dlg-title').textContent = title;
+  $('dlg-body').textContent = body;
+  $('dlg-ok').textContent = okLabel;
+  $('dialog').showModal();
+  return new Promise((resolve) => {
+    $('dlg-ok').onclick = () => { $('dialog').close(); resolve(true); };
+    $('dlg-cancel').onclick = () => { $('dialog').close(); resolve(false); };
+    $('dialog').oncancel = () => resolve(false);
+  });
+}
+
+async function post(url, body = {}) {
+  try {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) toast(data.error);
+    return res.ok;
+  } catch {
+    toast('서버에 연결하지 못했어요');
+    return false;
+  }
+}
+
+function lead(run) {
+  const published = Object.values(run.publish).filter((result) => result.status === 'done').length;
+  return {
+    running: `${run.stages.find((stage) => stage.status === 'running')?.label || '다음'} 단계를 진행하고 있어요`,
+    awaiting_approval: '내용을 확인하고 승인해 주세요',
+    publishing: '선택한 곳에 게시하고 있어요',
+    done: published ? `${published}곳에 게시했어요` : '승인했지만 게시된 곳은 없어요',
+    failed: '문제가 생겨서 멈췄어요',
+    rejected: '반려한 콘텐츠예요',
+  }[run.status];
+}
+
+function renderList() {
+  const all = [...runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const waiting = all.filter(FILTERS[1][2]).length;
+  document.title = waiting ? `(${waiting}) SNS Master` : 'SNS Master';
+  $('filters').innerHTML = FILTERS.map(([key, name, test]) =>
+    `<button class="filter ${key === filter ? 'sel' : ''}" data-filter="${key}">${name} ${all.filter(test).length}</button>`).join('');
+  const shown = all.filter(FILTERS.find(([key]) => key === filter)[2]);
+  $('list').innerHTML = shown.map((run) => `
+    <button class="item ${run.id === selected ? 'sel' : ''}" data-id="${run.id}">
+      <span class="thumb" ${run.image ? `style="background-image:url(/media/${run.id}/${run.image})"` : ''}></span>
+      <span class="body"><span class="topic">${esc(run.topic || '전체 트렌드')}${run.auto ? ' <span class="muted small">· 예약</span>' : ''}</span>
+        <span class="muted small">${ago(run.createdAt)}</span></span>
+      ${badge(run.status)}
+    </button>`).join('') || '<p class="empty muted small">여기에 해당하는 실행이 없어요</p>';
+}
+
+function renderSteps(run) {
+  return `<div class="steps">${run.stages.map((stage, i) => {
+    const mark = { done: CHECK, failed: '!' }[stage.status] || i + 1;
+    const time = stage.status === 'running' && stage.startedAt
+      ? `<span data-since="${stage.startedAt}">${elapsed(Date.now() - new Date(stage.startedAt))}</span>`
+      : stage.startedAt && stage.endedAt ? elapsed(new Date(stage.endedAt) - new Date(stage.startedAt)) : STATUS[stage.status];
+    return `<div class="step ${stage.status}"><div class="dot">${mark}</div><b>${esc(stage.label)}</b>
+      <span class="muted">${time}</span>${stage.error ? `<div class="err">${esc(stage.error)}</div>` : ''}</div>`;
+  }).join('')}</div>`;
+}
+
+function renderReview(run) {
+  if (!run.content) return '';
+  const editable = run.status === 'awaiting_approval';
+  const retry = run.status === 'failed' && stageOf(run, 'publish').status === 'failed';
+  const images = run.images || (run.image ? [run.image] : []);
+  const draft = drafts[run.id] ||= {
+    captions: { ...run.content.captions },
+    targets: Object.fromEntries(Object.keys(platforms).map((key) => [key, !platforms[key].unavailable])),
+  };
+  const fields = CAPTIONS.map((key) => `
+    <div class="field">
+      <div class="field-head"><span>${esc(label(key))}</span><span class="count" data-count="${key}"></span></div>
+      ${editable
+        ? `<textarea data-caption="${key}" aria-label="${esc(label(key))} 게시글">${esc(draft.captions[key])}</textarea>
+           <button class="link-btn" data-reset="${key}" hidden>처음 내용으로 되돌리기</button>`
+        : `<div class="readonly pre">${esc(run.content.captions[key])}</div>`}
+    </div>`).join('');
+  const targets = Object.entries(platforms).map(([key, platform]) => `
+    <label class="target ${platform.unavailable ? 'off' : ''}">
+      <input type="checkbox" data-target="${key}" ${draft.targets[key] ? 'checked' : ''} ${platform.unavailable ? 'disabled' : ''}>
+      <span><b>${esc(platform.label)}</b><small>${esc(platform.unavailable || '게시할 수 있어요')}</small></span>
+    </label>`).join('');
+  return `<div class="card">
+    <h2>${editable ? '게시할 내용을 확인해 주세요' : '게시 콘텐츠'}</h2>
+    <div class="review">
+      <div>
+        ${images.length ? `<div class="slides">${images.map((name, i) =>
+          `<a href="/media/${run.id}/${name}" target="_blank" title="원본 크기로 보기"><img src="/media/${run.id}/${name}" alt="${i + 1}번째 슬라이드"></a>`).join('')}</div>
+          ${images.length > 1 ? `<p class="muted small" style="margin-top:8px;text-align:center">옆으로 넘기면 ${images.length}장을 모두 볼 수 있어요</p>` : ''}`
+          : '<p class="readonly muted">이미지를 만들고 있어요</p>'}
+        ${run.reel ? `<h3>릴스 · ${Math.round(run.reel.seconds)}초</h3><video controls playsinline preload="metadata" src="/media/${run.id}/${run.reel.file}" style="display:block;width:100%;border-radius:16px;background:#000"></video>`
+          : run.reelError ? `<p class="small" style="margin-top:12px;color:var(--red)">릴스를 만들지 못했어요. ${esc(run.reelError)}</p>` : ''}
+      </div>
+      <div>
+        <div class="pick"><b>${esc(run.content.selected_issue_title)}</b><span class="muted small">${esc(run.content.reason)}</span></div>
+        ${fields}
+        ${editable ? `<h3>어디에 게시할까요?</h3><div class="targets">${targets}</div>
+          <div class="actions"><button class="btn danger" id="reject">반려하기</button><button class="btn primary" id="approve">승인하고 게시하기</button></div>
+          <p id="hint" hidden></p>` : ''}
+        ${retry ? '<div class="actions"><button class="btn primary" id="retry">실패한 곳에 다시 게시하기</button></div>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// 글자 수, 되돌리기 버튼, 승인 버튼의 활성화 여부를 현재 입력 내용에 맞게 갱신한다.
+function syncReview() {
+  const run = runs.get(selected);
+  const draft = drafts[selected];
+  if (!run?.content || !draft) return;
+  const editable = run.status === 'awaiting_approval';
+  const problems = [];
+  for (const key of CAPTIONS) {
+    const text = editable ? draft.captions[key] : run.content.captions[key];
+    const over = length(key, text) > LIMITS[key];
+    const counter = document.querySelector(`[data-count="${key}"]`);
+    counter.textContent = `${length(key, text).toLocaleString()} / ${LIMITS[key].toLocaleString()}자`;
+    counter.classList.toggle('over', over);
+    if (!editable) continue;
+    document.querySelector(`[data-reset="${key}"]`).hidden = text === run.content.captions[key];
+    if (!text.trim()) problems.push(`${label(key)} 게시글이 비어 있어요`);
+    else if (over && draft.targets[key]) problems.push(`${label(key)} 게시글이 ${LIMITS[key].toLocaleString()}자를 넘었어요`);
+  }
+  if (!editable) return;
+  $('approve').disabled = problems.length > 0;
+  $('hint').hidden = !problems.length;
+  $('hint').textContent = problems.join(' · ');
+}
+
+function renderPublish(run) {
+  const rows = Object.entries(run.publish).map(([key, result]) => `
+    <div class="row"><b style="width:96px">${esc(label(key))}</b>
+      <div class="grow">${result.url ? `<a href="${esc(result.url)}" target="_blank" rel="noreferrer">게시물 보기</a>` : `<span class="muted small">${esc(result.error)}</span>`}</div>
+      ${badge(result.status)}</div>`).join('');
+  return rows ? `<div class="card"><h2>게시 결과</h2>${rows}</div>` : '';
+}
+
+// 리서처가 맡은 플랫폼은 검색어에 포함된 플랫폼 이름으로 판별한다.
+const LANES = [
+  ['instagram', '인스타그램', /인스타|instagram|릴스/i],
+  ['x', 'X', /(^|[^a-z])x([^a-z]|$)|엑스|트위터|twitter/i],
+  ['threads', '쓰레드', /쓰레드|스레드|threads/i],
+  ['youtube', '유튜브', /유튜브|youtube|쇼츠/i],
+  ['community', '커뮤니티', /커뮤니티|펨코|에펨코리아|fmkorea|디시|dcinside|더쿠|theqoo|포텐|실베|핫게/i],
+];
+const SCORES = { hook: '후킹', flow: '흐름', share: '공유 가치', accuracy: '정확성', caption: '게시글' };
+const laneOf = (text) => LANES.find(([, , pattern]) => pattern.test(text))?.[0];
+
+function searchLanes(run) {
+  // 훅이 구조화된 기록을 남기기 전에 만든 실행은 로그 문장에서 검색어를 추출한다.
+  const searches = run.flow?.searches?.length ? run.flow.searches
+    : run.logs.map((log) => log.msg.match(/^웹 검색[^:]*: ([\s\S]*)$/)).filter(Boolean).map((m) => ({ query: m[1] }));
+  // 같은 리서처의 검색어는, 그 리서처의 검색어에 가장 자주 등장한 플랫폼으로 모은다.
+  const votes = {};
+  for (const { agent, query } of searches) {
+    const lane = laneOf(query);
+    if (agent && lane) (votes[agent] ||= {})[lane] = (votes[agent][lane] || 0) + 1;
+  }
+  const agentLane = Object.fromEntries(Object.entries(votes).map(([agent, count]) =>
+    [agent, Object.entries(count).sort((a, b) => b[1] - a[1])[0][0]]));
+  const lanes = { ...Object.fromEntries(LANES.map(([key]) => [key, []])), etc: [] };
+  for (const { agent, query } of searches) lanes[agentLane[agent] || laneOf(query) || 'etc'].push(query);
+  return { lanes, total: searches.length };
+}
+
+const flowNode = (state, number, title, sub, body = '') => `
+  <div class="node ${state}"><div class="dot">${state === 'done' ? CHECK : state === 'failed' ? '!' : number}</div>
+    <div><h3>${title}</h3><p class="muted small">${sub}</p>${body}</div></div>`;
+const queryList = (queries) => `<details><summary class="mini">검색어 보기</summary>
+  <ul>${queries.map((query) => `<li title="${esc(query)}">${esc(query)}</li>`).join('')}</ul></details>`;
+
+// 검색부터 게시까지, 콘텐츠가 어떤 과정을 거쳐 만들어졌는지를 흐름도로 보여 준다.
+function renderFlow(run) {
+  const state = (key) => ({ done: 'done', running: 'running', failed: 'failed' }[stageOf(run, key).status] || 'wait');
+  const { lanes, total } = searchLanes(run);
+  const issues = run.research?.issues || [];
+  const content = run.content;
+  const images = run.images || (run.image ? [run.image] : []);
+  const nodes = [];
+
+  // 커뮤니티 리서치가 추가되기 전에 만든 실행에는 커뮤니티 칸을 표시하지 않는다.
+  const shown = LANES.filter(([key]) => key !== 'community' || lanes.community.length || issues.some((issue) => issue.platforms.some((p) => LANES[4][2].test(p))));
+  nodes.push(flowNode(state('research'), 1, `${shown.length}곳에서 동시에 찾아봤어요`,
+    total ? `리서처 ${shown.length}명이 한 곳씩 맡아서 모두 ${total}번 검색했어요` : `리서처 ${shown.length}명이 한 곳씩 맡아서 검색해요`,
+    `<div class="lanes" style="grid-template-columns:repeat(${shown.length}, minmax(0, 1fr))">${shown.map(([key, name, pattern]) => `
+      <div class="lane"><b>${name}</b><span class="big">${lanes[key].length}</span> <span class="muted small">번 검색</span>
+        ${run.research ? `<div class="small">이슈 ${issues.filter((issue) => issue.platforms.some((p) => pattern.test(p))).length}개 채택</div>` : ''}
+        ${lanes[key].length ? queryList(lanes[key]) : ''}</div>`).join('')}</div>
+     ${lanes.etc.length ? `<div class="lane" style="margin-top:8px"><span class="muted small">플랫폼을 특정하지 않은 검색 ${lanes.etc.length}번</span>${queryList(lanes.etc)}</div>` : ''}`));
+
+  nodes.push(run.research ? flowNode('done', 2, `이슈 ${issues.length}개로 추렸어요`,
+    run.research.reported_count ? `리서처가 보고한 ${run.research.reported_count}개에서 겹치는 것을 합치고 출처가 없는 것을 뺐어요` : '겹치는 이슈를 합치고 출처가 없는 것을 뺐어요',
+    issues.map((issue) => {
+      const picked = issue.title === content?.selected_issue_title;
+      return `<details class="cand ${picked ? 'pick' : ''}"><summary class="mini"><span>${esc(issue.title)} ${picked ? '<span class="badge running">선택</span>' : ''}</span></summary>
+        <p class="small" style="margin-top:8px;font-weight:400;color:var(--sub)">${esc(issue.summary)}</p>
+        <p class="muted small" style="font-weight:400">${esc(issue.why_trending)}</p>
+        <div class="chips">${issue.platforms.map((p) => `<span class="chip">${esc(p)}</span>`).join('')}
+          ${issue.sources.map((url) => (host(url) ? `<a class="chip" href="${esc(url)}" target="_blank" rel="noreferrer">${esc(host(url))} ↗</a>` : '')).join('')}</div>
+      </details>`;
+    }).join('')
+    + (run.research.excluded?.length ? `<details class="cand"><summary class="mini"><span>이미 다룬 이슈 ${run.research.excluded.length}개는 뺐어요</span></summary>
+        <ul class="plain">${run.research.excluded.map((item) => `<li><b>${esc(item.title)}</b>${item.reason ? ` · ${esc(item.reason)}` : ''}</li>`).join('')}</ul></details>` : '')
+    + (content ? `<p class="small" style="margin-top:10px"><b>고른 이유</b> · ${esc(content.reason)}</p>` : ''))
+    : flowNode('wait', 2, '이슈를 추려요', '겹치는 이슈를 합치고 화제성이 높은 순서로 골라요'));
+
+  const hook = content?.slides?.[0]?.title;
+  if (hook) {
+    const candidates = content.hook_candidates || [];
+    nodes.push(flowNode('done', 3, '표지 문구를 골랐어요',
+      candidates.length ? `후보 ${candidates.length}개를 쓰고 그중에서 하나를 골랐어요` : '첫 장만 보고도 넘기고 싶어지는 문구예요',
+      candidates.map((text) => `<div class="cand ${text === hook ? 'pick' : ''}">${esc(text)}</div>`).join('')
+      + (candidates.includes(hook) ? '' : `<div class="cand pick">${esc(hook)} ${candidates.length ? '<span class="badge running">심사 후 수정</span>' : ''}</div>`)));
+  } else if (!content) {
+    nodes.push(flowNode(state('content') === 'running' ? 'running' : 'wait', 3, '표지 문구를 정해요', '후보를 5개 이상 쓰고 그중에서 하나를 골라요'));
+  }
+
+  // 문구를 쓰기 전에 정리한 설명과, 이슈를 모르는 독자가 화면 문구만 보고 이해한 내용을 나란히 보여 준다.
+  const reader = content?.review?.reader;
+  const after = content?.review?.reader_after;
+  const readerBlock = (name, result, fixed) => (result ? `<div class="cand"><b>${name}</b> <span class="badge ${result.score >= 4 ? 'done' : 'awaiting_approval'}">이해도 ${result.score} / 5</span>
+      ${fixed ? `<span class="muted small">→ 고친 뒤</span> <span class="badge ${fixed.score >= 4 ? 'done' : 'awaiting_approval'}">${fixed.score} / 5</span>` : ''}
+      <p class="small" style="margin-top:6px;font-weight:400;color:var(--sub)">"${esc(result.retell)}"</p>
+      ${result.unclear.length || result.unanswered.length ? `<ul class="plain">${result.unclear.map((item) => `<li><b>${esc(item.where)}</b> · ${esc(item.what)}</li>`).join('')}
+        ${result.unanswered.map((question) => `<li>답을 찾지 못한 질문 · ${esc(question)}</li>`).join('')}</ul>` : ''}
+      ${fixed ? `<p class="small" style="margin-top:8px;font-weight:400"><b>고친 뒤에 다시 읽혔을 때</b> · "${esc(fixed.retell)}"${fixed.unclear.length ? ` (아직 헷갈린 곳 ${fixed.unclear.length}건)` : ''}</p>` : ''}</div>` : '');
+  if (reader?.reel || reader?.carousel) {
+    nodes.push(flowNode('done', '?', '처음 보는 사람에게 읽혀 봤어요', '이슈를 모르는 독자에게 화면 문구만 보여 주고, 이해한 내용을 말하게 했어요',
+      `${content.explainer ? `<div class="cand"><b>전하려던 내용</b><p class="small" style="margin-top:6px;font-weight:400;color:var(--sub)">${esc(content.explainer)}</p></div>` : ''}
+       ${readerBlock('릴스를 본 독자', reader.reel, after?.reel)}${readerBlock('카드뉴스를 본 독자', reader.carousel, after?.carousel)}`));
+  }
+
+  // 장면과 장면 사이가 이어지는지를 검토한 결과를, 연결마다 통과 여부와 함께 보여 준다.
+  const flow = content?.review?.flow;
+  const flowAfter = content?.review?.flow_after;
+  const flowBlock = (name, result, fixed) => (result ? `<div class="cand"><b>${name}</b> <span class="badge ${result.score >= 4 ? 'done' : 'awaiting_approval'}">흐름 ${result.score} / 5</span>
+      ${fixed ? `<span class="muted small">→ 고친 뒤</span> <span class="badge ${fixed.score >= 4 ? 'done' : 'awaiting_approval'}">${fixed.score} / 5</span>` : ''}
+      <p class="small" style="margin-top:6px;font-weight:400;color:var(--sub)">${esc(result.read_through)}</p>
+      <div class="chips">${result.links.map((link) => `<span class="badge ${link.ok ? 'done' : 'failed'}" title="${esc(link.problem)}">${link.from} → ${link.to} ${link.ok ? '이어짐' : '끊김'}</span>`).join('')}</div>
+      ${result.links.some((link) => !link.ok) || result.repeats.length || result.order ? `<ul class="plain">
+        ${result.links.filter((link) => !link.ok).map((link) => `<li><b>${link.from}번 → ${link.to}번</b> · ${esc(link.problem)}${link.fix ? ` <span class="muted">고치는 방법: ${esc(link.fix)}</span>` : ''}</li>`).join('')}
+        ${result.repeats.map((repeat) => `<li><b>반복</b> · ${esc(repeat)}</li>`).join('')}
+        ${result.order ? `<li><b>순서</b> · ${esc(result.order)}</li>` : ''}</ul>` : ''}
+      ${fixed ? `<p class="small" style="margin-top:8px;font-weight:400"><b>고친 뒤에 다시 검토했을 때</b> · ${esc(fixed.read_through)}${fixed.links.some((link) => !link.ok) ? ` (아직 끊긴 연결 ${fixed.links.filter((link) => !link.ok).length}곳)` : ''}</p>` : ''}</div>` : '');
+  if (flow?.reel || flow?.carousel) {
+    nodes.push(flowNode('done', '→', '장면이 이어지는지 확인했어요', '이웃한 장면 사이를 하나씩 보면서, 하나의 이야기로 읽히는지 검토했어요',
+      `${content.spine ? `<div class="cand"><b>줄거리</b><p class="small" style="margin-top:6px;font-weight:400;color:var(--sub)">${esc(content.spine)}</p></div>` : ''}
+       ${flowBlock('릴스', flow.reel, flowAfter?.reel)}${flowBlock('카드뉴스', flow.carousel, flowAfter?.carousel)}`));
+  }
+
+  const review = content?.review;
+  if (review) {
+    nodes.push(flowNode('done', 4, '편집장 심사를 받았어요',
+      review.pass ? '다섯 가지 기준을 모두 통과했어요' : `지적 ${review.fixes.length}건을 받고 ${review.applied.length}건을 고쳤어요`,
+      `<div class="scores">${Object.entries(SCORES).map(([key, name]) => `<div class="score">${name}<b>${review.scores[key]}<span class="muted small"> / 5</span></b>
+        <div class="meter">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= review.scores[key] ? 'on' : ''}"></i>`).join('')}</div></div>`).join('')}</div>
+       ${review.fixes.length ? `<details class="cand"><summary class="mini">지적받은 내용 ${review.fixes.length}건</summary><ul class="plain">${review.fixes.map((fix) => `<li>${esc(fix)}</li>`).join('')}</ul></details>` : ''}
+       ${review.applied.length ? `<details class="cand" open><summary class="mini">이렇게 고쳤어요</summary><ul class="plain">${review.applied.map((fix) => `<li>${esc(fix)}</li>`).join('')}</ul></details>` : ''}
+       ${review.polish?.length ? `<details class="cand"><summary class="mini">한국어 문장을 다듬었어요 ${review.polish.length}건</summary><ul class="plain">${review.polish.map((fix) => `<li>${esc(fix)}</li>`).join('')}</ul></details>` : ''}`));
+  } else if (!content) {
+    const reviewing = run.flow?.agents.some((agent) => agent.type === 'sns-critic' && !agent.endedAt);
+    nodes.push(flowNode(reviewing ? 'running' : 'wait', 4, reviewing ? '편집장이 심사하고 있어요' : '편집장 심사를 받아요', '후킹, 흐름, 공유 가치, 정확성, 게시글을 채점해요'));
+  }
+
+  nodes.push(flowNode(state('image'), 5, images.length ? '카드뉴스로 만들었어요' : '카드뉴스로 만들어요',
+    images.length > 1 ? `표지 배경을 AI로 그리고, 글자를 얹어서 ${images.length}장을 완성했어요${run.reel ? `. ${Math.round(run.reel.seconds)}초짜리 릴스도 함께 만들었어요` : ''}` : images.length ? '이미지 한 장을 AI로 만들었어요' : '표지 배경을 AI로 그리고 글자를 얹어요',
+    `${images.length ? `<div class="strip">${images.map((name, i) => `<a href="/media/${run.id}/${name}" target="_blank"><img src="/media/${run.id}/${name}" alt="${i + 1}번째 슬라이드" loading="lazy"></a>`).join('')}</div>` : ''}
+     ${content ? `<details class="cand"><summary class="mini">표지 배경을 그릴 때 쓴 프롬프트</summary><p class="small pre" style="margin-top:8px;font-weight:400">${esc(content.image_prompt)}</p></details>` : ''}`));
+
+  const published = Object.entries(run.publish).filter(([, result]) => result.status === 'done').map(([key]) => label(key));
+  const lastState = { done: 'done', failed: 'failed', rejected: 'failed', awaiting_approval: 'running', publishing: 'running' }[run.status] || 'wait';
+  nodes.push(flowNode(stageOf(run, 'image').status === 'failed' ? 'wait' : lastState, 6,
+    { done: '승인하고 게시했어요', rejected: '반려했어요', awaiting_approval: '승인을 기다리고 있어요', publishing: '게시하고 있어요' }[run.status] || '승인하면 게시해요',
+    published.length ? `${published.join(', ')}에 올라갔어요` : '사람이 확인하고 승인해야 게시돼요'));
+
+  return `<div class="card"><h2>이렇게 만들었어요</h2><div class="flow">${nodes.join('')}</div></div>`;
+}
+
+function renderLogs(run) {
+  const open = run.status === 'failed';
+  const time = (iso) => new Date(iso).toLocaleTimeString('ko-KR', { hour12: false });
+  return `<div class="card"><details ${open ? 'open' : ''}><summary>원본 로그 ${run.logs.length}건</summary>
+    <div id="logs">${run.logs.map((log) => `<div><span class="muted">${time(log.t)}</span> ${esc(log.msg)}</div>`).join('') || '<span class="muted">아직 로그가 없어요</span>'}</div>
+  </details></div>`;
+}
+
+function renderDetail() {
+  const run = runs.get(selected);
+  if (!run) {
+    $('detail').innerHTML = `<div class="card empty"><h2 style="margin-bottom:8px">아직 선택한 실행이 없어요</h2>
+      <p class="muted">왼쪽에서 주제를 입력하고 만들기를 누르거나, Claude Code에서 <code>/sns-run 주제</code>를 입력해 보세요.</p></div>`;
+    return;
+  }
+  $('detail').innerHTML = `
+    <div class="card hero">
+      <p class="muted small">${new Date(run.createdAt).toLocaleString('ko-KR')} 시작</p>
+      <h2>${esc(run.topic || '전체 트렌드')}</h2>
+      <p class="lead">${esc(lead(run))} ${run.auto ? '<span class="badge">예약 실행</span>' : ''} ${run.autoApproved ? '<span class="badge done">자동 게시</span>' : ''}</p>
+      ${run.hold?.length && run.status === 'awaiting_approval' ? `<div class="notice">자동 게시의 기준을 통과하지 못해서 게시하지 않았어요. 직접 확인한 뒤에 승인하거나 반려해 주세요.
+        <ul>${run.hold.map((reason) => `<li>${esc(reason)}</li>`).join('')}</ul></div>` : ''}
+      ${renderSteps(run)}
+    </div>
+    ${renderReview(run)}${renderPublish(run)}${renderFlow(run)}${renderLogs(run)}`;
+  if ($('logs')) $('logs').scrollTop = $('logs').scrollHeight;
+  syncReview();
+}
+
+function select(id) {
+  selected = id;
+  renderList();
+  renderDetail();
+}
+
+$('new').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const button = event.target.querySelector('button');
+  button.disabled = true; // 새 실행은 서버가 보내는 이벤트로 목록에 추가되고 자동으로 선택된다.
+  if (await post('/api/generate', { topic: event.target.topic.value })) {
+    event.target.reset();
+    toast('콘텐츠를 만들기 시작했어요');
+  }
+  button.disabled = false;
+});
+
+$('filters').addEventListener('click', (event) => {
+  if (!event.target.dataset.filter) return;
+  filter = event.target.dataset.filter;
+  renderList();
+});
+
+$('list').addEventListener('click', (event) => {
+  const item = event.target.closest('[data-id]');
+  if (item) select(item.dataset.id);
+});
+
+$('detail').addEventListener('input', (event) => {
+  const { caption, target } = event.target.dataset;
+  if (caption) drafts[selected].captions[caption] = event.target.value;
+  if (target) drafts[selected].targets[target] = event.target.checked;
+  if (caption || target) syncReview();
+});
+
+$('detail').addEventListener('click', async (event) => {
+  const run = runs.get(selected);
+  const draft = drafts[selected];
+  const { reset } = event.target.dataset;
+  if (reset) {
+    draft.captions[reset] = run.content.captions[reset];
+    document.querySelector(`[data-caption="${reset}"]`).value = draft.captions[reset];
+    syncReview();
+  }
+  if (event.target.id === 'approve') {
+    const targets = Object.keys(draft.targets).filter((key) => draft.targets[key]);
+    const ok = targets.length
+      ? await ask('이대로 게시할까요?', `${targets.map(label).join(', ')}에 바로 게시돼요. 게시한 뒤에는 여기에서 취소할 수 없어요.`, '게시하기')
+      : await ask('게시할 곳이 없어요', '연결된 플랫폼을 선택하지 않아서, 승인해도 실제로 게시되지는 않아요. 그래도 승인할까요?', '승인하기');
+    if (ok && await post(`/api/runs/${selected}/approve`, { captions: draft.captions, platforms: targets })) toast('승인했어요');
+  }
+  if (event.target.id === 'reject'
+    && await ask('이 콘텐츠를 반려할까요?', '반려하면 게시되지 않고, 다시 되돌릴 수 없어요.', '반려하기')
+    && await post(`/api/runs/${selected}/reject`)) toast('반려했어요');
+  if (event.target.id === 'retry' && await post(`/api/runs/${selected}/approve`)) toast('다시 게시하고 있어요');
+});
+
+// 자동화 설정 화면이다. 고친 내용은 저장하기를 눌러야 반영된다.
+const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+let settingsView = null;
+let draftSettings = null;
+
+function renderAutoState() {
+  const s = settingsView.settings;
+  $('auto-state').className = `badge ${s.enabled ? 'done' : ''}`;
+  $('auto-state').textContent = !s.enabled ? '꺼짐' : s.autoPublish ? '예약 + 자동 게시' : '예약 중';
+}
+
+function renderSettings() {
+  const s = draftSettings;
+  const view = settingsView;
+  const next = view.next ? new Date(view.next).toLocaleString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' }) : null;
+  $('settings-body').innerHTML = `
+    <div class="set">
+      <label class="set-head"><span><b>예약 실행</b><p class="muted small">정해진 요일과 시각에 리서치부터 이미지 제작까지 자동으로 진행해요.</p></span>
+        <input type="checkbox" data-set="enabled" ${s.enabled ? 'checked' : ''}></label>
+      <p class="small" style="margin-top:8px">${view.settings.enabled && next ? `다음 실행 · <b>${next}</b>` : '<span class="muted">저장하면 다음 실행 시각이 여기에 표시돼요.</span>'}</p>
+      <h3>실행할 시각</h3>
+      <div class="row2">${s.times.map((time, i) => `<span class="row2"><input type="time" data-time="${i}" value="${time}" aria-label="실행 시각 ${i + 1}">
+        ${s.times.length > 1 ? `<button class="link-btn" data-remove-time="${i}" style="margin:0">삭제</button>` : ''}</span>`).join('')}
+        ${s.times.length < 6 ? '<button class="filter" id="add-time">+ 시각 추가</button>' : ''}</div>
+      <h3>요일</h3>
+      <div class="row2">${DAYS.map((name, day) => `<button class="filter ${s.days.includes(day) ? 'sel' : ''}" data-day="${day}">${name}</button>`).join('')}</div>
+      <h3>주제</h3>
+      <input type="text" data-set-text="topic" maxlength="200" value="${esc(s.topic)}" placeholder="비워 두면 전체 트렌드를 조사해요">
+      <p class="muted small" style="margin-top:8px">한 번 실행하는 데 15~20분이 걸리고, 앞의 실행이 끝나지 않았으면 그 시각의 예약은 건너뛰어요.</p>
+    </div>
+    <div class="set">
+      <label class="set-head"><span><b>자동 게시</b><p class="muted small">예약 실행으로 만든 콘텐츠가 아래 기준을 모두 통과하면, 사람의 승인 없이 바로 게시해요.</p></span>
+        <input type="checkbox" data-set="autoPublish" ${s.autoPublish ? 'checked' : ''}></label>
+      <h3>게시하기 위한 기준</h3>
+      <ul class="plain">${view.gates.map((gate) => `<li>${esc(gate)}</li>`).join('')}</ul>
+      <p class="muted small" style="margin-top:8px">기준을 하나라도 통과하지 못하면 게시하지 않고 승인 대기로 남겨요. 꺼 두면 예약 실행으로 만든 콘텐츠도 항상 승인을 기다려요.</p>
+      <h3>게시할 곳</h3>
+      <div class="targets">${Object.entries(view.platforms).map(([key, platform]) => `
+        <label class="target ${platform.unavailable ? 'off' : ''}" style="background:var(--card)">
+          <input type="checkbox" data-auto-target="${key}" ${s.targets.includes(key) ? 'checked' : ''}>
+          <span><b>${esc(platform.label)}</b><small>${esc(platform.unavailable || '게시할 수 있어요')}</small></span></label>`).join('')}</div>
+    </div>
+    <div class="set">
+      <label class="set-head"><span><b>터널 자동 연결</b><p class="muted small">인스타그램과 쓰레드가 이미지를 가져갈 수 있도록, 서버가 Cloudflare 터널을 직접 열고 주소를 반영해요. 외부에는 생성된 이미지와 영상만 공개돼요.</p></span>
+        <input type="checkbox" data-set="tunnel" ${s.tunnel ? 'checked' : ''}></label>
+      <p class="small" style="margin-top:8px">${view.tunnel.error ? `<span style="color:var(--red)">${esc(view.tunnel.error)}</span>`
+        : view.tunnel.url ? `연결됨 · <span class="muted">${esc(view.tunnel.url)}</span>`
+          : view.settings.tunnel ? '<span class="muted">연결하고 있어요. 잠시 뒤에 이 화면을 다시 열어 확인해 주세요.</span>'
+            : `<span class="muted">꺼져 있어요. 현재 공개 주소 · ${esc(view.tunnel.publicBaseUrl || '없음')}</span>`}</p>
+    </div>`;
+}
+
+async function loadSettings() {
+  settingsView = await (await fetch('/api/settings')).json();
+  renderAutoState();
+}
+
+$('open-settings').addEventListener('click', async () => {
+  await loadSettings();
+  draftSettings = structuredClone(settingsView.settings);
+  renderSettings();
+  $('settings').showModal();
+});
+$('settings-close').addEventListener('click', () => $('settings').close());
+
+$('settings').addEventListener('input', (event) => {
+  const data = event.target.dataset;
+  if (data.set) draftSettings[data.set] = event.target.checked;
+  if (data.setText) draftSettings[data.setText] = event.target.value;
+  if (data.time) draftSettings.times[Number(data.time)] = event.target.value;
+  if (data.autoTarget) {
+    draftSettings.targets = draftSettings.targets.filter((key) => key !== data.autoTarget);
+    if (event.target.checked) draftSettings.targets.push(data.autoTarget);
+  }
+});
+
+$('settings').addEventListener('click', async (event) => {
+  const data = event.target.dataset;
+  if (event.target.id === 'add-time') draftSettings.times.push('18:00');
+  else if (data.removeTime) draftSettings.times.splice(Number(data.removeTime), 1);
+  else if (data.day) {
+    const day = Number(data.day);
+    draftSettings.days = draftSettings.days.includes(day) ? draftSettings.days.filter((d) => d !== day) : [...draftSettings.days, day];
+  } else if (event.target.id === 'settings-save') {
+    // 사람의 확인 없이 게시되는 설정이므로, 새로 켤 때에는 한 번 더 확인한다.
+    if (draftSettings.autoPublish && !settingsView.settings.autoPublish
+      && !await ask('자동 게시를 켤까요?', '기준을 통과한 콘텐츠는 사람이 확인하지 않고 바로 게시돼요. 게시한 뒤에는 여기에서 취소할 수 없어요.', '켜기')) return;
+    const res = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draftSettings) });
+    const data2 = await res.json();
+    if (!res.ok) return toast(data2.error);
+    settingsView = data2;
+    draftSettings = structuredClone(data2.settings);
+    renderAutoState();
+    toast('저장했어요');
+  } else return;
+  renderSettings();
+});
+
+loadSettings();
+
+// 진행 중인 단계의 경과 시간과 목록의 상대 시간을 주기적으로 갱신한다.
+setInterval(() => {
+  for (const el of document.querySelectorAll('[data-since]')) el.textContent = elapsed(Date.now() - new Date(el.dataset.since));
+}, 1000);
+setInterval(renderList, 60000);
+
+const source = new EventSource('/api/events');
+source.onerror = () => { $('conn').className = 'off'; $('conn').textContent = '연결이 끊겨서 다시 시도하고 있어요'; };
+source.addEventListener('init', (event) => {
+  $('conn').className = '';
+  $('conn').textContent = '실시간 연결됨';
+  const data = JSON.parse(event.data);
+  platforms = data.platforms;
+  runs.clear();
+  for (const run of data.runs) runs.set(run.id, run);
+  $('platforms').innerHTML = Object.values(platforms).map((p) =>
+    `<span class="badge ${p.unavailable ? '' : 'on'}" title="${esc(p.unavailable || '게시할 수 있어요')}">${esc(p.label)} ${p.unavailable ? '미연결' : '연결됨'}</span>`).join('');
+  // 처음 열었을 때에는 관리자가 처리해야 하는 승인 대기 건을 먼저 보여 준다.
+  if (!runs.has(selected)) {
+    const sorted = [...runs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    selected = (sorted.find((run) => run.status === 'awaiting_approval') || sorted[0])?.id || null;
+  }
+  renderList();
+  renderDetail();
+});
+source.addEventListener('run', (event) => {
+  const run = JSON.parse(event.data);
+  const previous = runs.get(run.id);
+  runs.set(run.id, run);
+  if (!previous) selected = run.id; // 새로 시작된 실행은 자동으로 선택하여 진행 상황을 표시한다.
+  if (run.status === 'awaiting_approval' && previous?.status !== 'awaiting_approval') toast(`'${run.topic || '전체 트렌드'}' 콘텐츠가 승인을 기다리고 있어요`);
+  renderList();
+  if (run.id !== selected) return;
+  // 사용자가 게시글을 수정하고 있을 때 화면을 다시 그리면 입력 위치가 사라지므로, 상태가 바뀐 경우에만 다시 그린다.
+  if (run.status === 'awaiting_approval' && previous?.status === 'awaiting_approval') return;
+  renderDetail();
+});
+</script>
+</body>
+</html>
